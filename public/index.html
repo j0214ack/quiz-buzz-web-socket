@@ -93,6 +93,10 @@
       justify-content: center;
       align-items: center;
       box-shadow: 0 10px 40px rgba(245, 87, 108, 0.4);
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
     }
 
     .btn-buzz:hover {
@@ -221,11 +225,15 @@
       }
     });
 
-    buzzBtn.addEventListener('click', () => {
+    function handleBuzz(e) {
+      e.preventDefault();
       if (!hasBuzzed && isRoundActive) {
         socket.emit('buzz');
       }
-    });
+    }
+
+    buzzBtn.addEventListener('click', handleBuzz);
+    buzzBtn.addEventListener('touchend', handleBuzz);
 
     socket.on('buzzResult', (data) => {
       if (data.success) {
