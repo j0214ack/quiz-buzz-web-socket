@@ -33,8 +33,12 @@ function getLocalIP() {
 
 // Generate QR code endpoint
 app.get('/qrcode', async (req, res) => {
-  const ip = getLocalIP();
-  const url = `http://${ip}:${PORT}`;
+  // Use request host header for public URL, fallback to local IP for development
+  const host = req.get('host');
+  const protocol = req.get('x-forwarded-proto') || req.protocol || 'http';
+  const url = host.includes('localhost') || host.match(/^\d+\.\d+\.\d+\.\d+/)
+    ? `http://${getLocalIP()}:${PORT}`
+    : `${protocol}://${host}`;
   try {
     const qrDataUrl = await QRCode.toDataURL(url, { width: 300 });
     res.json({ qrcode: qrDataUrl, url });
