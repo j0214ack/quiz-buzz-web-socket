@@ -156,9 +156,41 @@
       font-size: 14px;
       margin-top: 10px;
     }
+
+    .connection-status {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      padding: 10px;
+      text-align: center;
+      font-size: 14px;
+      font-weight: bold;
+      z-index: 1000;
+      transition: transform 0.3s ease;
+    }
+
+    .connection-status.connected {
+      background: #56ab2f;
+      color: white;
+      transform: translateY(-100%);
+    }
+
+    .connection-status.disconnected {
+      background: #f5576c;
+      color: white;
+      transform: translateY(0);
+    }
+
+    .connection-status.reconnecting {
+      background: #f5a623;
+      color: white;
+      transform: translateY(0);
+    }
   </style>
 </head>
 <body>
+  <div id="connectionStatus" class="connection-status connected">已連線</div>
   <div class="container">
     <!-- Registration Page -->
     <div id="registerPage" class="page active">
@@ -190,13 +222,51 @@
     const buzzBtn = document.getElementById('buzzBtn');
     const positionMsg = document.getElementById('positionMsg');
     const waitingMsg = document.getElementById('waitingMsg');
+    const connectionStatus = document.getElementById('connectionStatus');
 
     let hasBuzzed = false;
     let isRoundActive = false;
+    let isConnected = false;
+    let myName = null;
 
-    // Check for saved name
+    // Connection status handlers
+    socket.on('connect', () => {
+      isConnected = true;
+      updateConnectionStatus('connected');
+      // Re-register if we have a saved name (reconnection scenario)
+      const savedName = localStorage.getItem('guestName');
+      if (savedName) {
+        socket.emit('register', savedName);
+      }
+    });
+
+    socket.on('disconnect', () => {
+      isConnected = false;
+      updateConnectionStatus('disconnected');
+    });
+
+    socket.io.on('reconnect_attempt', () => {
+      updateConnectionStatus('reconnecting');
+    });
+
+    function updateConnectionStatus(status) {
+      connectionStatus.className = 'connection-status ' + status;
+      if (status === 'connected') {
+        connectionStatus.textContent = '已連線';
+      } else if (status === 'disconnected') {
+        connectionStatus.textContent = '連線已斷開，正在重新連線...';
+      } else if (status === 'reconnecting') {
+        connectionStatus.textContent = '正在重新連線...';
+      }
+      // Update buzz button state based on connection
+      if (buzzPage.classList.contains('active')) {
+        updateBuzzButton();
+      }
+    }
+
+    // Check for saved name on initial load
     const savedName = localStorage.getItem('guestName');
-    if (savedName) {
+    if (savedName && socket.connected) {
       socket.emit('register', savedName);
     }
 
@@ -227,7 +297,7 @@
 
     function handleBuzz(e) {
       e.preventDefault();
-      if (!hasBuzzed && isRoundActive) {
+      if (!hasBuzzed && isRoundActive && isConnected) {
         socket.emit('buzz');
       }
     }
@@ -262,11 +332,19 @@
 
     function setRoundActive(active) {
       isRoundActive = active;
-      if (active && !hasBuzzed) {
+      updateBuzzButton();
+    }
+
+    function updateBuzzButton() {
+      if (!isConnected) {
+        buzzBtn.classList.add('disabled');
+        buzzBtn.textContent = '斷線中';
+        waitingMsg.textContent = '連線已斷開...';
+      } else if (isRoundActive && !hasBuzzed) {
         buzzBtn.classList.remove('disabled');
         buzzBtn.textContent = '搶答';
         waitingMsg.textContent = '快按搶答!';
-      } else if (!active && !hasBuzzed) {
+      } else if (!isRoundActive && !hasBuzzed) {
         buzzBtn.classList.add('disabled');
         buzzBtn.textContent = '等待';
         waitingMsg.textContent = '等待主持人開始...';
@@ -276,11 +354,9 @@
     function resetBuzzState() {
       hasBuzzed = false;
       buzzBtn.classList.remove('buzzed');
-      buzzBtn.classList.add('disabled');
-      buzzBtn.textContent = '等待';
       positionMsg.textContent = '';
       waitingMsg.style.display = 'block';
-      waitingMsg.textContent = '等待主持人開始...';
+      updateBuzzButton();
     }
   </script>
 </body>
